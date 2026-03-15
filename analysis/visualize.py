@@ -192,7 +192,7 @@ ax2.plot(months, growth_vals, color="red", marker="o",
 ax2.axhline(0, color="red", linestyle="--", linewidth=0.8, alpha=0.4)
 ax2.set_ylabel("Median MoM Growth %", color="red", fontsize=10)
 ax2.tick_params(axis="y", labelcolor="red")
-ax2.set_ylim(-30, 80)
+ax2.set_ylim(-30, 300)
 
 lines1, labels1 = ax1.get_legend_handles_labels()
 lines2, labels2 = ax2.get_legend_handles_labels()

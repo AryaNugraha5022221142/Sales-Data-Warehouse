@@ -1,4 +1,4 @@
-category,total_revenue,total_profit
-Technology,827455.94,0.0
-Furniture,728658.75,0.0
-Office Supplies,705422.28,0.0
+category,total_revenue,total_orders
+Technology,827455.94,1813.0
+Furniture,728658.75,2078.0
+Office Supplies,705422.28,5909.0
