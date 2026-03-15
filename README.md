@@ -72,11 +72,4 @@ Sales-Data-Warehouse/
 ### RFM Customer Segments
 ![RFM](analysis/charts/chart_rfm_segments.png)
 
----
 
-## 🔑 SQL Skills Demonstrated
-- **Window Functions** — `LAG()`, `SUM() OVER()`, `NTILE()`
-- **CTEs** — Multi-step RFM segmentation
-- **JOINs** — Fact-to-dimension joins across star schema
-- **Views** — Reusable reporting layer
-- **Aggregations** — Revenue, profit, order count by dimension
