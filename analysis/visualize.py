@@ -42,15 +42,15 @@ print("📦 Loading data from warehouse...\n")
 
 df_category = pd.read_sql("""
     SELECT p.category,
-           SUM(f.totalsales)  AS total_revenue,
-           SUM(f.totalprofit) AS total_profit
+           SUM(f.totalsales)    AS total_revenue,
+           COUNT(f.saleskey)    AS total_orders
     FROM warehouse.factsales f
     JOIN warehouse.dimproduct p ON f.productkey = p.productkey
     GROUP BY p.category
     ORDER BY total_revenue DESC
 """, engine)
 df_category["total_revenue"] = df_category["total_revenue"].fillna(0).astype(float)
-df_category["total_profit"]  = df_category["total_profit"].fillna(0).astype(float)
+df_category["total_orders"]  = df_category["total_orders"].fillna(0).astype(float)
 
 df_monthly = pd.read_sql("""
     SELECT d.year, d.monthofyear, d.monthname,
@@ -92,33 +92,36 @@ print("✅ All data loaded.\n")
 # ============================================================
 # CHART 1: Revenue & Profit by Category (Grouped Bar)
 # ============================================================
-print("🎨 Generating charts...")
 
-x     = list(range(len(df_category)))
-width = 0.35
-
-fig, ax = plt.subplots(figsize=(9, 5))
-bars1 = ax.bar(
-    [i - width/2 for i in x],
+fig, ax1 = plt.subplots(figsize=(9, 5))
+colors = sns.color_palette("Blues_d", len(df_category))
+bars = ax1.bar(
+    df_category["category"].tolist(),
     df_category["total_revenue"].tolist(),
-    width, label="Revenue", color="steelblue", alpha=0.85
+    color=colors, edgecolor="white", label="Revenue"
 )
-bars2 = ax.bar(
-    [i + width/2 for i in x],
-    df_category["total_profit"].tolist(),
-    width, label="Profit", color="#2ecc71", alpha=0.85
-)
-ax.set_xticks(x)
-ax.set_xticklabels(df_category["category"].tolist(), fontsize=10)
-ax.set_title("Revenue & Profit by Product Category", fontsize=14, fontweight="bold")
-ax.set_ylabel("Amount (USD)")
-currency_formatter(ax)
-ax.legend()
-for bar in list(bars1) + list(bars2):
+ax1.set_ylabel("Total Revenue (USD)", fontsize=10)
+currency_formatter(ax1)
+
+ax2 = ax1.twinx()
+ax2.plot(df_category["category"].tolist(),
+         df_category["total_orders"].tolist(),
+         color="orange", marker="o", linewidth=2,
+         markersize=8, label="Total Orders")
+ax2.set_ylabel("Total Orders", color="orange", fontsize=10)
+ax2.tick_params(axis="y", labelcolor="orange")
+
+for bar in bars:
     h = bar.get_height()
-    ax.annotate(f"${h:,.0f}",
-                (bar.get_x() + bar.get_width() / 2, h),
-                ha="center", va="bottom", fontsize=8, fontweight="bold")
+    ax1.annotate(f"${h:,.0f}",
+                 (bar.get_x() + bar.get_width() / 2, h),
+                 ha="center", va="bottom", fontsize=9, fontweight="bold")
+
+lines1, labels1 = ax1.get_legend_handles_labels()
+lines2, labels2 = ax2.get_legend_handles_labels()
+ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper right", fontsize=9)
+ax1.set_title("Revenue & Order Count by Product Category",
+              fontsize=14, fontweight="bold")
 plt.tight_layout()
 save_chart("chart_category.png")
 
@@ -165,11 +168,12 @@ save_chart("chart_region.png")
 MONTH_ORDER = ["January", "February", "March", "April", "May", "June",
                "July", "August", "September", "October", "November", "December"]
 
+# Fix aggregation — use median for growth % to resist outliers
 df_mom_agg = df_mom.groupby(
     ["monthofyear", "monthname"], as_index=False
 ).agg(
-    revenue=("revenue", "mean"),
-    mom_growth_pct=("mom_growth_pct", "mean")
+    revenue=("revenue", "mean"),           # mean is fine for revenue
+    mom_growth_pct=("mom_growth_pct", "median")  # median resists the spike
 ).sort_values("monthofyear")
 
 df_mom_agg["monthname"] = pd.Categorical(
@@ -190,15 +194,16 @@ plt.xticks(rotation=30, ha="right")
 
 ax2 = ax1.twinx()
 ax2.plot(months, growth_vals, color="red", marker="o",
-         linewidth=2, label="Avg MoM Growth %")
+         linewidth=2, label="Median MoM Growth %")
 ax2.axhline(0, color="red", linestyle="--", linewidth=0.8, alpha=0.4)
-ax2.set_ylabel("Avg MoM Growth %", color="red", fontsize=10)
+ax2.set_ylabel("Median MoM Growth %", color="red", fontsize=10)
 ax2.tick_params(axis="y", labelcolor="red")
+ax2.set_ylim(-50, 150)   # cap Y-axis so chart stays readable
 
 lines1, labels1 = ax1.get_legend_handles_labels()
 lines2, labels2 = ax2.get_legend_handles_labels()
 ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper left", fontsize=9)
-fig.suptitle("Month-over-Month Revenue Growth (Avg Across All Years)",
+fig.suptitle("Month-over-Month Revenue Growth (Median Across All Years)",
              fontsize=14, fontweight="bold")
 plt.tight_layout()
 save_chart("chart_mom_growth.png")
