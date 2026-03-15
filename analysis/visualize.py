@@ -93,35 +93,29 @@ print("✅ All data loaded.\n")
 # CHART 1: Revenue & Profit by Category (Grouped Bar)
 # ============================================================
 
-fig, ax1 = plt.subplots(figsize=(9, 5))
+fig, ax = plt.subplots(figsize=(9, 5))
 colors = sns.color_palette("Blues_d", len(df_category))
-bars = ax1.bar(
+bars = ax.bar(
     df_category["category"].tolist(),
     df_category["total_revenue"].tolist(),
-    color=colors, edgecolor="white", label="Revenue"
+    color=colors, edgecolor="white", linewidth=0.8
 )
-ax1.set_ylabel("Total Revenue (USD)", fontsize=10)
-currency_formatter(ax1)
+ax.set_title("Revenue & Order Count by Product Category", fontsize=14, fontweight="bold")
+ax.set_ylabel("Total Revenue (USD)")
+currency_formatter(ax)
 
-ax2 = ax1.twinx()
-ax2.plot(df_category["category"].tolist(),
-         df_category["total_orders"].tolist(),
-         color="orange", marker="o", linewidth=2,
-         markersize=8, label="Total Orders")
-ax2.set_ylabel("Total Orders", color="orange", fontsize=10)
-ax2.tick_params(axis="y", labelcolor="orange")
-
-for bar in bars:
+for bar, orders in zip(bars, df_category["total_orders"].tolist()):
     h = bar.get_height()
-    ax1.annotate(f"${h:,.0f}",
-                 (bar.get_x() + bar.get_width() / 2, h),
-                 ha="center", va="bottom", fontsize=9, fontweight="bold")
+    # Revenue label on top
+    ax.annotate(f"${h:,.0f}",
+                (bar.get_x() + bar.get_width() / 2, h),
+                ha="center", va="bottom", fontsize=9, fontweight="bold")
+    # Order count label inside bar
+    ax.annotate(f"{int(orders):,} orders",
+                (bar.get_x() + bar.get_width() / 2, h * 0.5),
+                ha="center", va="center", fontsize=9,
+                color="white", fontweight="bold")
 
-lines1, labels1 = ax1.get_legend_handles_labels()
-lines2, labels2 = ax2.get_legend_handles_labels()
-ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper right", fontsize=9)
-ax1.set_title("Revenue & Order Count by Product Category",
-              fontsize=14, fontweight="bold")
 plt.tight_layout()
 save_chart("chart_category.png")
 
@@ -198,7 +192,7 @@ ax2.plot(months, growth_vals, color="red", marker="o",
 ax2.axhline(0, color="red", linestyle="--", linewidth=0.8, alpha=0.4)
 ax2.set_ylabel("Median MoM Growth %", color="red", fontsize=10)
 ax2.tick_params(axis="y", labelcolor="red")
-ax2.set_ylim(-50, 150)   # cap Y-axis so chart stays readable
+ax2.set_ylim(-30, 80)
 
 lines1, labels1 = ax1.get_legend_handles_labels()
 lines2, labels2 = ax2.get_legend_handles_labels()
