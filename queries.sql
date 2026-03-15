@@ -1,122 +1,89 @@
--- ============================================
--- SALES DATA WAREHOUSE - REPORTING QUERIES
--- ============================================
+-- ============================================================
+-- SALES DATA WAREHOUSE — REPORTING QUERIES
+-- Author: Arya Nugraha
+-- Database: sales_dw | Schema: warehouse
+-- Stack: PostgreSQL 18
+-- ============================================================
+-- ------------------------------------------------------------
+-- SECTION 1: BASIC REPORTING
+-- ------------------------------------------------------------
 
-
--- ============================================
--- QUERY 1: Total Revenue by Product Category
--- ============================================
-SELECT 
+-- 1.1 Total Revenue by Product Category
+SELECT
     p.category,
-    SUM(f.totalsales) AS total_revenue,
-    COUNT(f.orderid)  AS total_orders
+    SUM(f.totalsales)       AS total_revenue,
+    SUM(f.totalprofit)      AS total_profit,
+    COUNT(f.saleskey)       AS total_orders
 FROM warehouse.factsales f
 JOIN warehouse.dimproduct p ON f.productkey = p.productkey
 GROUP BY p.category
 ORDER BY total_revenue DESC;
 
 
--- ============================================
--- QUERY 2: Monthly Sales Trend
--- ============================================
-SELECT 
+-- 1.2 Revenue by Region
+-- (paste your existing region query here)
+
+
+-- 1.3 Monthly Revenue Trend
+-- (paste your existing monthly trend query here)
+
+
+-- ------------------------------------------------------------
+-- SECTION 2: WINDOW FUNCTIONS
+-- ------------------------------------------------------------
+
+-- 2.1 Month-over-Month Revenue Growth
+SELECT
     d.year,
-    d.monthname,
     d.monthofyear,
-    SUM(f.totalsales)  AS monthly_revenue,
-    COUNT(f.orderid)   AS total_orders
+    d.monthname,
+    SUM(f.totalsales)                                                        AS revenue,
+    LAG(SUM(f.totalsales)) OVER (ORDER BY d.year, d.monthofyear)             AS prev_month_revenue,
+    ROUND(
+        (SUM(f.totalsales) - LAG(SUM(f.totalsales)) OVER (ORDER BY d.year, d.monthofyear))
+        / NULLIF(LAG(SUM(f.totalsales)) OVER (ORDER BY d.year, d.monthofyear), 0) * 100, 2
+    )                                                                        AS mom_growth_pct
 FROM warehouse.factsales f
 JOIN warehouse.dimdate d ON f.datekey = d.datekey
-GROUP BY d.year, d.monthname, d.monthofyear
+GROUP BY d.year, d.monthofyear, d.monthname
 ORDER BY d.year, d.monthofyear;
 
 
--- ============================================
--- QUERY 3: Top 10 Customers by Spend
--- ============================================
-SELECT 
-    c.customername,
-    c.segment,
-    c.region,
-    SUM(f.totalsales)  AS total_spent,
-    COUNT(f.orderid)   AS total_orders
-FROM warehouse.factsales f
-JOIN warehouse.dimcustomer c ON f.customerkey = c.customerkey
-GROUP BY c.customername, c.segment, c.region
-ORDER BY total_spent DESC
-LIMIT 10;
-
-
--- ============================================
--- QUERY 4: Sales Performance by Region
--- ============================================
-SELECT 
-    c.region,
-    SUM(f.totalsales)  AS total_revenue,
-    COUNT(f.orderid)   AS total_orders,
-    ROUND(AVG(f.totalsales)::numeric, 2) AS avg_order_value
-FROM warehouse.factsales f
-JOIN warehouse.dimcustomer c ON f.customerkey = c.customerkey
-GROUP BY c.region
-ORDER BY total_revenue DESC;
-
-
--- ============================================
--- QUERY 5: Top 10 Best Selling Products
--- ============================================
-SELECT 
-    p.productname,
-    p.category,
-    p.subcategory,
-    SUM(f.totalsales)  AS total_revenue,
-    COUNT(f.orderid)   AS total_orders
-FROM warehouse.factsales f
-JOIN warehouse.dimproduct p ON f.productkey = p.productkey
-GROUP BY p.productname, p.category, p.subcategory
-ORDER BY total_revenue DESC
-LIMIT 10;
-
-
--- ============================================
--- QUERY 6: Yearly Revenue Growth
--- ============================================
-SELECT 
-    d.year,
-    SUM(f.totalsales) AS yearly_revenue,
-    LAG(SUM(f.totalsales)) OVER (ORDER BY d.year) AS prev_year_revenue,
-    ROUND(
-        (SUM(f.totalsales) - LAG(SUM(f.totalsales)) OVER (ORDER BY d.year)) 
-        / LAG(SUM(f.totalsales)) OVER (ORDER BY d.year) * 100, 2
-    ) AS growth_pct
+-- 2.2 Running Cumulative Revenue by Day
+SELECT
+    d.fulldate,
+    SUM(f.totalsales)                                                           AS daily_revenue,
+    SUM(SUM(f.totalsales)) OVER (ORDER BY d.fulldate ROWS UNBOUNDED PRECEDING)  AS cumulative_revenue
 FROM warehouse.factsales f
 JOIN warehouse.dimdate d ON f.datekey = d.datekey
-GROUP BY d.year
-ORDER BY d.year;
+GROUP BY d.fulldate
+ORDER BY d.fulldate;
 
 
--- ============================================
--- QUERY 7: Customer Segment Analysis
--- ============================================
-SELECT 
-    c.segment,
-    COUNT(DISTINCT c.customerkey) AS total_customers,
-    SUM(f.totalsales)             AS total_revenue,
-    ROUND(AVG(f.totalsales)::numeric, 2) AS avg_order_value
-FROM warehouse.factsales f
-JOIN warehouse.dimcustomer c ON f.customerkey = c.customerkey
-GROUP BY c.segment
-ORDER BY total_revenue DESC;
+-- ------------------------------------------------------------
+-- SECTION 3: CTEs — CUSTOMER SEGMENTATION (RFM)
+-- ------------------------------------------------------------
 
-
--- ============================================
--- QUERY 8: Top Subcategories per Category
--- ============================================
-SELECT 
-    p.category,
-    p.subcategory,
-    SUM(f.totalsales) AS total_revenue,
-    RANK() OVER (PARTITION BY p.category ORDER BY SUM(f.totalsales) DESC) AS rank_in_category
-FROM warehouse.factsales f
-JOIN warehouse.dimproduct p ON f.productkey = p.productkey
-GROUP BY p.category, p.subcategory
-ORDER BY p.category, rank_in_category;
+-- 3.1 RFM Scoring: Recency, Frequency, Monetary
+WITH rfm AS (
+    SELECT
+        f.customerkey,
+        MAX(d.fulldate)                         AS last_purchase,
+        COUNT(*)                                AS frequency,
+        SUM(f.totalsales)                       AS monetary,
+        CURRENT_DATE - MAX(d.fulldate)          AS recency_days
+    FROM warehouse.factsales f
+    JOIN warehouse.dimdate d ON f.datekey = d.datekey
+    GROUP BY f.customerkey
+),
+rfm_scored AS (
+    SELECT *,
+        NTILE(4) OVER (ORDER BY recency_days ASC)   AS r_score,
+        NTILE(4) OVER (ORDER BY frequency DESC)     AS f_score,
+        NTILE(4) OVER (ORDER BY monetary DESC)      AS m_score
+    FROM rfm
+)
+SELECT *,
+    CONCAT(r_score, f_score, m_score)               AS rfm_segment
+FROM rfm_scored
+ORDER BY monetary DESC;
