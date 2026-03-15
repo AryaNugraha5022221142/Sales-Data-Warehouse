@@ -72,4 +72,6 @@ Sales-Data-Warehouse/
 ### RFM Customer Segments
 ![RFM](analysis/charts/chart_rfm_segments.png)
 
+### Total Sales by Region
+![Region](analysis/charts/chart_region.png)
 
